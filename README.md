@@ -68,3 +68,24 @@ npm run typecheck
 
 Les tests complets de l'intégration SQL, des permissions et de l'économie restent
 dans le dépôt plateforme ; ils ne sont pas remplacés par les tests de ce dépôt.
+
+## Installation du module SQL
+
+Le fichier [setup/install-platform-admin.sql](setup/install-platform-admin.sql)
+regroupe les quatre migrations centrales dans une transaction unique. Il est
+prévu pour le projet central `revanche-game-platform`, via SQL Editor. Il vérifie
+les tables et colonnes requises avant toute modification, refuse une réinstallation
+et enregistre les quatre versions lorsque l'historique standard Supabase existe.
+Il ne crée aucun compte joueur ni mouvement de portefeuille.
+
+Ce script installe les tables, fonctions, politiques et vérifications MFA. La liste
+historique d'assistance est reprise avec le rôle assistance, sans droit financier.
+Il n'attribue ni propriété ni nouveau compte administrateur ; la désignation du
+premier compte constitue l'étape suivante. Les routes du serveur plateforme et les
+adaptateurs natifs doivent toujours être déployés séparément pour leurs fonctions.
+
+Vérifications locales du fichier complet : installation sur le schéma de test
+existant, conservation des profils et du solde, reprise de l'assistance avec MFA,
+enregistrement des versions, refus d'une réinstallation et annulation intégrale
+si une colonne requise manque. Aucun SQL de ce fichier n'a été exécuté sur la
+production par l'assistant.
