@@ -134,6 +134,7 @@ const labels: Record<string, string> = {
   resolved_at: "Résolution",
   transaction_reference: "Référence de paiement",
   attachment_path: "Pièce jointe",
+  attachments_count: "Captures disponibles",
   code: "Code",
   reward_coins: "Pièces",
   active: "Actif",
@@ -1248,16 +1249,10 @@ export default function AdminPage() {
                   </button>
                 </>
               )}
-              {["report", "ticket"].includes(section) && (
-                <a
-                  className="button"
-                  href={`/api/attachment?type=${section}&id=${target}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Ouvrir la pièce jointe
-                </a>
-              )}
+              {section === "report" && Array.from({ length: Number((data?.evidence as Row | undefined)?.attachments_count || 0) }, (_, position) => (
+                <a key={position} className="button" href={`/api/attachment?type=report&id=${target}&file=${position}`} target="_blank" rel="noreferrer">Ouvrir la capture {position + 1}</a>
+              ))}
+              {section === "ticket" && <a className="button" href={`/api/attachment?type=ticket&id=${target}`} target="_blank" rel="noreferrer">Ouvrir la pièce jointe</a>}
             </div>
           </section>
         )}

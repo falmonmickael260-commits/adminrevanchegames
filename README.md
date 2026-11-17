@@ -107,3 +107,7 @@ Après les deux scripts d’installation précédents, appliquer `setup/admin-pl
 Les salons montrent les profils liés à leur instance et la date de dernière vérification ; les anciennes entrées ne sont pas présentées comme des présences en direct. Le spectateur 10000 présente aussi les identifiants de profils vérifiés et distingue les invités, sans exposer de jeton de place.
 
 La disponibilité des jeux est un contrôle HTTP ; pour 10000, l’ouverture du WebSocket est également vérifiée sans créer de joueur. Ce contrôle ne remplace pas une recette fonctionnelle du jeu. `admin_attention()` est une API `SECURITY DEFINER` volontairement [signalée par le conseiller](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable), comme les autres RPC administrateurs : elle exige une adhésion active et la MFA, puis filtre chaque catégorie selon les permissions.
+
+### Plusieurs captures pour les signalements
+
+La plateforme peut joindre trois captures privées par signalement. La migration centrale `player_report_evidence` ajoute les métadonnées bornées et les politiques Storage nécessaires ; elle est déjà appliquée sur l’installation existante. Le dossier de signalement affiche un lien par capture. Le téléchargement utilise toujours la session du membre, son rôle de modération et la MFA, sans clé de service dans ce panneau. Les anciennes preuves restent accessibles via leur chemin historique.

@@ -11,10 +11,17 @@ export async function GET(request: Request) {
       p_target: q.get("id"),
     });
     if (error) throw new AdminError("Accès refusé.", 403);
-    const path =
+    let path =
       type === "report"
         ? data?.evidence?.attachment_path
         : data?.ticket?.attachment_path;
+    const position = Number(q.get("file") || 0);
+    if (!Number.isInteger(position) || position < 0 || position > 2) throw new AdminError("Capture introuvable.", 404);
+    if (type === "report") {
+      const capture = await db.from("report_attachments").select("storage_path").eq("report_id", q.get("id")).eq("position", position).maybeSingle();
+      if (capture.error) throw new AdminError("Pièces jointes indisponibles.", 503);
+      path = capture.data?.storage_path || (position === 0 ? path : null);
+    }
     if (!path) throw new AdminError("Aucune pièce jointe.", 404);
     // Storage RLS rechecks role and MFA for this user's JWT. No service key.
     const file = await db.storage
