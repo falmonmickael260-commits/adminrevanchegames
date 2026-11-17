@@ -99,3 +99,11 @@ Pour une nouvelle installation, exécuter `setup/install-platform-admin.sql`, pu
 La fonction utilise volontairement `SECURITY DEFINER` pour lire uniquement l’e-mail d’Auth et l’identité publique. L’[avertissement du conseiller Supabase](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) est attendu pour cette API contrôlée : l’exécution anonyme est révoquée et les utilisateurs ordinaires, administrateurs désactivés et sessions sans MFA sont refusés.
 
 La rubrique Codes promotionnels liste les codes actifs. Les anciens codes déjà utilisés peuvent être désactivés sans supprimer l’historique des récompenses.
+
+### Suivi joueur, alertes et disponibilité
+
+Après les deux scripts d’installation précédents, appliquer `setup/admin-player-followup.sql` pour une installation neuve. La mise à jour est déjà installée sur la plateforme existante. La fiche joueur regroupe les achats, mouvements du portefeuille, signalements et tickets selon les permissions du membre. La recherche globale accepte pseudo ou e-mail. Les alertes internes sont actualisées toutes les 30 secondes et ne transmettent aucun e-mail.
+
+Les salons montrent les profils liés à leur instance et la date de dernière vérification ; les anciennes entrées ne sont pas présentées comme des présences en direct. Le spectateur 10000 présente aussi les identifiants de profils vérifiés et distingue les invités, sans exposer de jeton de place.
+
+La disponibilité des jeux est un contrôle HTTP ; pour 10000, l’ouverture du WebSocket est également vérifiée sans créer de joueur. Ce contrôle ne remplace pas une recette fonctionnelle du jeu. `admin_attention()` est une API `SECURITY DEFINER` volontairement [signalée par le conseiller](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable), comme les autres RPC administrateurs : elle exige une adhésion active et la MFA, puis filtre chaque catégorie selon les permissions.

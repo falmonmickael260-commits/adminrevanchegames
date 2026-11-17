@@ -23,6 +23,8 @@ type Session = {
 type Data = Record<string, unknown> & { rows?: Row[]; total?: number; identities?: Identities };
 const titles: Record<string, string> = {
   dashboard: "Vue d’ensemble",
+  alerts: "Alertes récentes",
+  health: "Disponibilité des jeux",
   players: "Joueurs",
   rooms: "Salons & parties",
   reports: "Signalements",
@@ -46,6 +48,26 @@ const labels: Record<string, string> = {
   id: "Identifiant",
   user_id: "Joueur",
   username: "Pseudo",
+  participants: "Joueurs identifiés",
+  game: "Jeu",
+  players: "Joueurs",
+  board: "Plateau de jeu",
+  started: "Partie commencée",
+  turnScore: "Points du tour",
+  tableDice: "Dés sur la table",
+  committedDice: "Dés conservés",
+  currentPlayerIndex: "Position du joueur actif",
+  presence: "Fraîcheur du salon",
+  is_guest: "Joueur invité",
+  connected: "Connexion active",
+  name: "Pseudo dans le jeu",
+  title: "Alerte",
+  section: "Rubrique",
+  availability: "Disponibilité réseau",
+  http_status: "Réponse HTTP",
+  response_ms: "Temps de réponse (ms)",
+  websocket: "Connexion de jeu",
+  checked_at: "Vérifié à",
   email: "Adresse e-mail",
   player_tag: "Identifiant public",
   sender_id: "Expéditeur",
@@ -779,6 +801,7 @@ function Observer({
     };
   }, [room, access]);
   return (
+    <IdentityContext.Provider value={{ ...identities, ...snapshot?.identities }}>
     <div className="overlay">
       <section
         className="dialog observer"
@@ -834,6 +857,7 @@ function Observer({
         )}
       </section>
     </div>
+    </IdentityContext.Provider>
   );
 }
 
@@ -841,6 +865,8 @@ export default function AdminPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [boot, setBoot] = useState(true);
   const [section, setSection] = useState("dashboard");
+  const [attention, setAttention] = useState<Data | null>(null);
+  const [attentionError, setAttentionError] = useState("");
   const [target, setTarget] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
@@ -894,6 +920,18 @@ export default function AdminPage() {
       clearInterval(timer);
     };
   }, [session, load]);
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const next = await getData("alerts");
+        if (!cancelled) { setAttention(next); setAttentionError(""); }
+      } catch { if (!cancelled) setAttentionError("Actualisation des alertes indisponible."); }
+    };
+    void refresh(); const timer = setInterval(() => void refresh(), 30000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [session]);
   function navigate(next: string, id = "") {
     setData(null);
     setSection(next);
@@ -926,6 +964,7 @@ export default function AdminPage() {
     if (section === "players") navigate("player", String(row.id));
     if (section === "reports") navigate("report", String(row.id));
     if (section === "tickets") navigate("ticket", String(row.id));
+    if (section === "alerts") navigate(String(row.section), String(row.target));
   }
   const rawDetail =
     section === "player"
@@ -937,7 +976,7 @@ export default function AdminPage() {
           : null;
   const detail =
     rawDetail && typeof rawDetail === "object" ? (rawDetail as Row) : null;
-  const identities = data?.identities || {};
+  const identities = { ...attention?.identities, ...data?.identities };
   const actionContext = form?.target ? rows.find(row => String(row.id || row.user_id) === form.target) || detail : null;
   return (
     <IdentityContext.Provider value={identities}>
@@ -1000,6 +1039,16 @@ export default function AdminPage() {
           Base commune Revanche Games{" "}
           <span>• Actualisation toutes les 30 secondes</span>
         </div>
+        <section className="global-search">
+          <PlayerPicker name="globalPlayer" label="Recherche globale — pseudo ou e-mail" optional onIdentity={person => navigate("player", person.id)} />
+        </section>
+        {attentionError && <p role="status" className="notice">{attentionError}</p>}
+        {section === "dashboard" && attention && <section className="panel">
+          <h2>Alertes récentes · {attention.rows?.length || 0}</h2>
+          {attention.rows?.length ? attention.rows.map(row => <button className="alert-entry" key={String(row.id)} onClick={() => navigate(String(row.section), String(row.target))}>
+            <strong>{String(row.title)}</strong><span>{display(row.user_id, "user_id", identities)}</span><small>{display(row.created_at, "created_at")}</small>
+          </button>) : <p>Aucune alerte nécessitant votre attention.</p>}
+        </section>}
         <div className="toolbar">
           <form
             onSubmit={(e) => {
@@ -1080,6 +1129,7 @@ export default function AdminPage() {
             </section>
           </>
         )}
+        {section === "health" && <p className="notice">Contrôle réseau toutes les 30 secondes. Une réponse HTTP ne garantit pas l’absence de bugs pendant une partie ; la connexion multijoueur est également vérifiée pour 10000.</p>}
         {section === "rooms" && (
           <p className="notice">
             Le registre est un miroir des jeux. Vérifiez la date de mise à jour.
@@ -1225,6 +1275,10 @@ export default function AdminPage() {
                     sanctions: "Sanctions",
                     evidence: "Preuves conservées",
                     assignment: "Attribution",
+                    wallet: "Historique des recharges et mouvements de pièces",
+                    payments: "Achats et paiements",
+                    reports: "Signalements liés au joueur",
+                    tickets: "Demandes d’assistance",
                   }[key] || key}
                 </h2>
                 {Array.isArray(value) ? (
@@ -1276,11 +1330,13 @@ export default function AdminPage() {
                       ))}
                       <td>
                         <div className="row-actions">
-                          {["players", "reports", "tickets"].includes(
+                          {["players", "reports", "tickets", "alerts"].includes(
                             section,
                           ) && (
                             <button onClick={() => openRow(row)}>Ouvrir</button>
                           )}
+                          {row.user_id && !["players", "alerts"].includes(section) ? <button onClick={() => navigate("player", String(row.user_id))}>Fiche joueur</button> : null}
+                          {section === "health" && <button onClick={() => { navigate("rooms"); setSearch(String(row.id)); }}>Voir les salons</button>}
                           {section === "payments" && session.canCredit && (
                             <button
                               onClick={() =>

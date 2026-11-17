@@ -567,3 +567,8 @@ dd {
 td:has(.profile-identity) { white-space: normal; overflow-wrap: anywhere; min-width: 220px; }
 
 .profile-identity { display: block; white-space: normal; overflow-wrap: anywhere; }
+
+.global-search { border: 1px solid var(--line); padding: 0 16px 12px; margin-bottom: 20px; border-radius: 10px; }
+.alert-entry { display: grid; grid-template-columns: minmax(150px,1fr) minmax(180px,2fr) auto; gap: 12px; width: 100%; text-align: left; margin: 8px 0; }
+.alert-entry span { overflow-wrap: anywhere; }
+@media(max-width:640px) { .alert-entry { grid-template-columns: 1fr; gap: 5px; } }

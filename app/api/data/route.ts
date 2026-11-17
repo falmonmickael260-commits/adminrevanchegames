@@ -1,3 +1,4 @@
+import { gameHealth } from "../../../lib/game-health";
 import { collectIdentityIds, type Identity } from "../../../lib/identities";
 import { adminSession, failure, json, AdminError } from "../../../lib/server";
 export async function GET(request: Request) {
@@ -5,6 +6,10 @@ export async function GET(request: Request) {
     const { db } = await adminSession();
     const q = new URL(request.url).searchParams;
     const offset = Number(q.get("offset") || 0);
+    if (q.get("section") === "health") {
+      const rows = await gameHealth();
+      return json({ rows, total: rows.length, identities: {}, offset: 0 });
+    }
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000)
       throw new AdminError("Page invalide.", 400);
     const { data, error } = await db.rpc("admin_query", {
