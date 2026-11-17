@@ -557,3 +557,13 @@ dd {
 .manual-mfa h2 { font-size: 16px; margin: 0 0 10px; }
 .manual-mfa p { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .manual-mfa .mfa-secret { font-family: monospace; font-size: 16px; }
+
+.player-picker ul { list-style: none; padding: 0; max-height: 250px; overflow-y: auto; }
+.player-picker li button { width: 100%; text-align: left; margin: 3px 0; }
+.player-picker li strong, .player-picker li span, .player-picker li small { display: block; overflow-wrap: anywhere; }
+.identity-confirmed { padding: 12px; border: 1px solid var(--accent); border-radius: 8px; overflow-wrap: anywhere; }
+.action-context { padding: 12px; border: 1px solid var(--line); border-radius: 8px; max-height: 240px; overflow: auto; margin-bottom: 16px; }
+.action-context h3 { margin-top: 0; }
+td:has(.profile-identity) { white-space: normal; overflow-wrap: anywhere; min-width: 220px; }
+
+.profile-identity { display: block; white-space: normal; overflow-wrap: anywhere; }

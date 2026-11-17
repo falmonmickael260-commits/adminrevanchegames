@@ -1,3 +1,4 @@
+import { collectIdentityIds, type Identity } from "../../../lib/identities";
 import { adminSession, failure, json, AdminError } from "../../../lib/server";
 export async function GET(request: Request) {
   try {
@@ -19,7 +20,14 @@ export async function GET(request: Request) {
           : "Données indisponibles.",
         error.code === "42501" ? 403 : 503,
       );
-    return json(data);
+    const ids = collectIdentityIds(data);
+    const identities: Record<string, Identity> = {};
+    if (ids.length) {
+      const { data: people, error: identityError } = await db.rpc("admin_identity_lookup", { p_ids: ids });
+      if (identityError) throw new AdminError("Identification des joueurs indisponible. Réessayez avant toute action.", 503);
+      for (const person of (people || []) as Identity[]) identities[person.id] = person;
+    }
+    return json({ ...data, identities });
   } catch (error) {
     return failure(error);
   }

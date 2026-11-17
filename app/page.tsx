@@ -1,5 +1,7 @@
 "use client";
 import {
+  createContext,
+  useContext,
   useCallback,
   useEffect,
   useRef,
@@ -10,13 +12,15 @@ import Link from "next/link";
 import Image from "next/image";
 import { browserDb } from "../lib/browser";
 
+import { identityLabel, type Identity, type Identities } from "../lib/identities";
+const IdentityContext = createContext<Identities>({});
 type Row = Record<string, unknown>;
 type Session = {
   userId: string;
   role: "owner" | "admin" | "moderator" | "support";
   canCredit: boolean;
 };
-type Data = Record<string, unknown> & { rows?: Row[]; total?: number };
+type Data = Record<string, unknown> & { rows?: Row[]; total?: number; identities?: Identities };
 const titles: Record<string, string> = {
   dashboard: "Vue d’ensemble",
   players: "Joueurs",
@@ -42,6 +46,15 @@ const labels: Record<string, string> = {
   id: "Identifiant",
   user_id: "Joueur",
   username: "Pseudo",
+  email: "Adresse e-mail",
+  player_tag: "Identifiant public",
+  sender_id: "Expéditeur",
+  recipient_id: "Destinataire",
+  reporter_id: "Auteur du signalement",
+  author_id: "Auteur",
+  assignee_id: "Responsable attribué",
+  assignee: "Responsable attribué",
+  revoked_by: "Sanction levée par",
   created_at: "Création",
   last_seen_at: "Dernière activité",
   role: "Rôle",
@@ -65,7 +78,6 @@ const labels: Record<string, string> = {
   maintenance: "Maintenance",
   message: "Message",
   body: "Message",
-  reporter_id: "Auteur",
   target_user_id: "Joueur signalé",
   category: "Catégorie",
   context: "Contexte",
@@ -76,8 +88,6 @@ const labels: Record<string, string> = {
   livemode: "Paiement réel",
   entitled_coins: "Pièces attribuées",
   refunded_amount: "Remboursé (centimes)",
-  sender_id: "Expéditeur",
-  recipient_id: "Destinataire",
   gift_id: "Cadeau",
   quantity: "Quantité",
   total_price: "Coût",
@@ -145,13 +155,14 @@ function permitted(session: Session, section: string) {
     return session.role === "admin";
   return true;
 }
-function display(value: unknown, key = ""): string {
+function display(value: unknown, key = "", identities: Identities = {}): string {
+  if (typeof value === "string" && identities[value.toLowerCase()]) return identityLabel(identities[value.toLowerCase()]);
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "boolean") return value ? "Oui" : "Non";
-  if (Array.isArray(value)) return value.map((v) => display(v)).join(", ");
+  if (Array.isArray(value)) return value.map((v) => display(v, "", identities)).join(", ");
   if (typeof value === "object")
     return Object.entries(value as Row)
-      .map(([k, v]) => `${labels[k] || k} : ${display(v, k)}`)
+      .map(([k, v]) => `${labels[k] || k} : ${display(v, k, identities)}`)
       .join(" · ");
   if (key.endsWith("_at") && !Number.isNaN(Date.parse(String(value))))
     return new Date(String(value)).toLocaleString("fr-FR");
@@ -381,11 +392,52 @@ const actionNames: Record<string, string> = {
   spectate: "Ouvrir la vue spectateur",
   promo: "Configurer un code promotionnel",
 };
+function PlayerPicker({ name, label, initial = "", optional = false, staff = false, onIdentity }: {
+  name: string; label: string; initial?: string; optional?: boolean; staff?: boolean;
+  onIdentity: (identity: Identity) => void;
+}) {
+  const identities = useContext(IdentityContext);
+  const [selected, setSelected] = useState(initial);
+  const [search, setSearch] = useState(identities[initial] ? identityLabel(identities[initial]) : "");
+  const [matches, setMatches] = useState<Identity[]>([]);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (selected || search.trim().length < 2) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/identities?${new URLSearchParams({ search: search.trim(), staff: String(staff) })}`, { signal: controller.signal, cache: "no-store" });
+        const result = await response.json();
+        if (controller.signal.aborted) return;
+        if (!response.ok) throw new Error(result.error || "Recherche indisponible.");
+        setMatches(result.rows); setError(result.rows.length ? "" : "Aucun profil trouvé.");
+      } catch (error) { if (!controller.signal.aborted) setError((error as Error).message); }
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [search, selected, staff]);
+  return <div className="player-picker">
+    <label>{label}
+      <input aria-label={label} value={search} placeholder="Rechercher par pseudo, e-mail ou identifiant public" maxLength={120}
+        required={!optional} onChange={event => { setSearch(event.target.value); setSelected(""); setMatches([]); setError(""); }} />
+    </label>
+    <input type="hidden" name={name} value={selected} />
+    <input type="hidden" name={`_${name}Search`} value={search} />
+    {!!matches.length && <ul aria-label="Profils trouvés">{matches.map(person => <li key={person.id}><button type="button" onClick={() => {
+      setSelected(person.id); setSearch(identityLabel(person)); setMatches([]); setError(""); onIdentity(person);
+    }}><strong>{person.username || person.player_tag || "Profil sans pseudo"}</strong><span>{person.email || "E-mail indisponible"}</span>{person.player_tag && <small>RG-{person.player_tag}</small>}</button></li>)}</ul>}
+    {selected && <p className="identity-confirmed">Profil sélectionné : {identities[selected] ? identityLabel(identities[selected]) : selected}</p>}
+    {!selected && <p className="small">{optional ? "Laissez vide pour ne cibler personne. " : ""}Sélectionnez un profil dans les résultats.</p>}
+    {error && <p role="status">{error}</p>}
+  </div>;
+}
+
 function ActionDialog({
   form,
   onClose,
   onDone,
+  context,
 }: {
+  context?: Row | null;
   form: ActionForm;
   onClose: () => void;
   onDone: (result: unknown, id: string) => void;
@@ -394,10 +446,19 @@ function ActionDialog({
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState<Row | null>(null);
   const operation = useRef<{ id: string; payload: Row } | null>(null);
+  const inheritedIdentities = useContext(IdentityContext);
+  const [chosen, setChosen] = useState<Identities>({});
+  const identities = { ...inheritedIdentities, ...chosen };
+  const playerTarget = ["wallet", "sanction", "member", "announce"].includes(form.action) || (form.action === "note" && form.type === "player");
+  const remember = (identity: Identity) => setChosen(current => ({ ...current, [identity.id]: identity }));
   function prepare(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const raw = Object.fromEntries(new FormData(e.currentTarget));
-    const payload: Row = { ...raw };
+    for (const name of ["target", "assignee"]) {
+      if (raw[`_${name}Search`] && !raw[name]) { setError("Sélectionnez le profil dans les résultats avant de continuer."); return; }
+    }
+    if (playerTarget && form.action !== "announce" && !raw.target) { setError("Sélectionnez le joueur concerné."); return; }
+    const payload: Row = Object.fromEntries(Object.entries(raw).filter(([key]) => !key.startsWith("_")));
     if (form.action === "wallet") payload.delta = Number(raw.delta);
     if (form.action === "member") {
       payload.enabled = raw.enabled === "true";
@@ -447,6 +508,7 @@ function ActionDialog({
     }
   }
   return (
+    <IdentityContext.Provider value={identities}>
     <div className="overlay">
       <section
         role="dialog"
@@ -463,6 +525,7 @@ function ActionDialog({
           ×
         </button>
         <h2 id="action-title">{actionNames[form.action]}</h2>
+        {context && !playerTarget && <section className="action-context"><h3>Joueur et opération concernés</h3><Fields data={context} /></section>}
         {review ? (
           <>
             <p>Vérifiez les informations avant de confirmer.</p>
@@ -478,24 +541,21 @@ function ActionDialog({
           </>
         ) : (
           <form onSubmit={prepare}>
-            {!["game", "announce", "promo"].includes(form.action) && (
+            {playerTarget && <PlayerPicker name="target" label={form.action === "announce" ? "Joueur destinataire (vide pour tous)" : "Joueur concerné"} initial={form.target} optional={form.action === "announce"} onIdentity={remember} />}
+            {!playerTarget && !["game", "announce", "promo"].includes(form.action) && (
               <label>
                 {form.action === "revoke"
                   ? "Identifiant de la sanction"
                   : "Identifiant de la cible"}
-                <input name="target" defaultValue={form.target} required />
+                <input name="target" defaultValue={form.target} readOnly={Boolean(form.target)} required />
               </label>
             )}
-            {form.action === "announce" && (
-              <label>
-                Joueur destinataire (vide pour tous)
-                <input name="target" />
-              </label>
-            )}
+
+            {form.type && ["note", "assign"].includes(form.action) && <input type="hidden" name="type" value={form.type} />}
             {["note", "assign"].includes(form.action) && (
               <label>
                 Type de dossier
-                <select name="type" defaultValue={form.type || "player"}>
+                <select name="type" defaultValue={form.type || "player"} disabled={Boolean(form.type)}>
                   {(form.action === "note"
                     ? ["player", "report", "ticket"]
                     : ["report", "ticket"]
@@ -610,12 +670,7 @@ function ActionDialog({
                 </label>
               </>
             )}
-            {form.action === "assign" && (
-              <label>
-                Identifiant du responsable (vide pour libérer)
-                <input name="assignee" />
-              </label>
-            )}
+            {form.action === "assign" && <PlayerPicker name="assignee" label="Responsable (vide pour libérer le dossier)" optional staff onIdentity={remember} />}
             {form.action === "promo" && (
               <>
                 <label>
@@ -659,9 +714,11 @@ function ActionDialog({
         )}
       </section>
     </div>
+    </IdentityContext.Provider>
   );
 }
 function Fields({ data }: { data: Row }) {
+  const identities = useContext(IdentityContext);
   return (
     <dl>
       {Object.entries(data)
@@ -669,7 +726,7 @@ function Fields({ data }: { data: Row }) {
         .map(([k, v]) => (
           <div key={k}>
             <dt>{labels[k] || k}</dt>
-            <dd>{display(v, k)}</dd>
+            <dd>{display(v, k, identities)}</dd>
           </div>
         ))}
     </dl>
@@ -685,6 +742,7 @@ function Observer({
   access: string;
   onClose: () => void;
 }) {
+  const identities = useContext(IdentityContext);
   const [snapshot, setSnapshot] = useState<Data | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -766,7 +824,7 @@ function Observer({
                 ) : value && typeof value === "object" ? (
                   <Fields data={value as Row} />
                 ) : (
-                  <p>{display(value, key)}</p>
+                  <p>{display(value, key, identities)}</p>
                 )}
               </section>
             ))}
@@ -879,7 +937,10 @@ export default function AdminPage() {
           : null;
   const detail =
     rawDetail && typeof rawDetail === "object" ? (rawDetail as Row) : null;
+  const identities = data?.identities || {};
+  const actionContext = form?.target ? rows.find(row => String(row.id || row.user_id) === form.target) || detail : null;
   return (
+    <IdentityContext.Provider value={identities}>
     <div className="app">
       <aside className="sidebar">
         <Link className="brand" href="/">
@@ -953,7 +1014,7 @@ export default function AdminPage() {
             <input
               name="search"
               aria-label="Rechercher ou filtrer"
-              placeholder="Rechercher un pseudo, identifiant ou statut…"
+              placeholder={section === "players" ? "Rechercher un pseudo, e-mail ou identifiant public…" : "Rechercher un identifiant, motif ou statut…"}
               maxLength={120}
             />
             <button>Rechercher</button>
@@ -1153,7 +1214,7 @@ export default function AdminPage() {
         {["player", "ticket", "report"].includes(section) &&
           data &&
           Object.entries(data)
-            .filter(([key]) => !["profile", "ticket", "report"].includes(key))
+            .filter(([key]) => !["profile", "ticket", "report", "identities"].includes(key))
             .map(([key, value]) => (
               <section className="panel" key={key}>
                 <h2>
@@ -1201,15 +1262,15 @@ export default function AdminPage() {
                       key={String(row.id || row.user_id || row.slug || index)}
                     >
                       {Object.entries(row).map(([key, value]) => (
-                        <td key={key} title={display(value, key)}>
+                        <td key={key} title={display(value, key, identities)}>
                           <span
                             className={
                               ["status", "state", "kind"].includes(key)
                                 ? "badge"
-                                : ""
+                                : typeof value === "string" && identities[value.toLowerCase()] ? "profile-identity" : ""
                             }
                           >
-                            {display(value, key)}
+                            {display(value, key, identities)}
                           </span>
                         </td>
                       ))}
@@ -1331,6 +1392,7 @@ export default function AdminPage() {
       {form && (
         <ActionDialog
           form={form}
+          context={actionContext}
           onClose={() => setForm(null)}
           onDone={(_result, id) => {
             if (form.action === "spectate" && form.target)
@@ -1340,5 +1402,6 @@ export default function AdminPage() {
         />
       )}
     </div>
+    </IdentityContext.Provider>
   );
 }

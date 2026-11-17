@@ -89,3 +89,13 @@ existant, conservation des profils et du solde, reprise de l'assistance avec MFA
 enregistrement des versions, refus d'une réinstallation et annulation intégrale
 si une colonne requise manque. Aucun SQL de ce fichier n'a été exécuté sur la
 production par l'assistant.
+
+### Identification des joueurs dans l’administration
+
+Les listes, fiches, historiques et confirmations résolvent les identifiants des joueurs en pseudo et e-mail. Les achats conservent leur identifiant de transaction ; leur propriétaire est identifié séparément. Les formulaires ciblant un joueur proposent une recherche par pseudo, e-mail ou identifiant public, et exigent une sélection explicite avant confirmation.
+
+Pour une nouvelle installation, exécuter `setup/install-platform-admin.sql`, puis `setup/admin-profile-identities.sql`. Cette mise à jour est déjà appliquée à la plateforme existante. Les e-mails restent dans Auth ; ils ne sont pas copiés dans les profils publics et aucune clé de service n’est ajoutée au panneau. L’API utilise le JWT de l’administrateur, des réponses privées sans cache et la fonction `admin_identity_lookup`, qui vérifie le rôle actif et le niveau MFA `aal2` à chaque appel.
+
+La fonction utilise volontairement `SECURITY DEFINER` pour lire uniquement l’e-mail d’Auth et l’identité publique. L’[avertissement du conseiller Supabase](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) est attendu pour cette API contrôlée : l’exécution anonyme est révoquée et les utilisateurs ordinaires, administrateurs désactivés et sessions sans MFA sont refusés.
+
+La rubrique Codes promotionnels liste les codes actifs. Les anciens codes déjà utilisés peuvent être désactivés sans supprimer l’historique des récompenses.
