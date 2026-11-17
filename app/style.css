@@ -547,3 +547,13 @@ dd {
   color: var(--muted);
   font-size: 13px;
 }
+
+.manual-mfa {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.manual-mfa h2 { font-size: 16px; margin: 0 0 10px; }
+.manual-mfa p { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.manual-mfa .mfa-secret { font-family: monospace; font-size: 16px; }

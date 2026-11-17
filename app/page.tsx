@@ -176,9 +176,14 @@ function Login({ onReady }: { onReady: () => void }) {
   const [step, setStep] = useState<"login" | "mfa">("login");
   const [factor, setFactor] = useState("");
   const [qr, setQr] = useState("");
+  const [secret, setSecret] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function prepareMfa() {
+    setSecret("");
+    setQr("");
+    setCopyMessage("");
     const db = browserDb();
     const membership = await db
       .from("admin_members")
@@ -206,6 +211,7 @@ function Login({ onReady }: { onReady: () => void }) {
         throw new Error("Activation de la double authentification impossible.");
       setFactor(enrolled.data.id);
       setQr(enrolled.data.totp.qr_code);
+      setSecret(enrolled.data.totp.secret);
     }
     setStep("mfa");
   }
@@ -228,6 +234,8 @@ function Login({ onReady }: { onReady: () => void }) {
           code: String(form.get("code")),
         });
         if (error) throw new Error("Code incorrect ou expiré.");
+        setSecret("");
+        setQr("");
         onReady();
       }
     } catch (e) {
@@ -285,6 +293,38 @@ function Login({ onReady }: { onReady: () => void }) {
                     alt="QR code pour activer la double authentification"
                   />
                 </>
+              )}
+              {secret && (
+                <section className="manual-mfa" aria-labelledby="manual-mfa-title">
+                  <h2 id="manual-mfa-title">Sur le même téléphone ?</h2>
+                  <p>Copiez cette clé, puis ouvrez votre application Authenticator : + → Saisir une clé de configuration. Nommez le compte « Revanche Games » et choisissez « Basé sur l’heure ».</p>
+                  <label>
+                    Clé de configuration
+                    <input
+                      type="text"
+                      className="mfa-secret"
+                      value={secret}
+                      readOnly
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      onFocus={(event) => event.currentTarget.select()}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(secret);
+                        setCopyMessage("Clé copiée. Collez-la dans votre application Authenticator.");
+                      } catch {
+                        setCopyMessage("Touchez la clé pour la sélectionner, puis choisissez Copier dans le menu de votre téléphone.");
+                      }
+                    }}
+                  >Copier la clé</button>
+                  <p role="status">{copyMessage}</p>
+                  <p>Ne partagez pas cette clé. Revenez ensuite ici pour saisir le code à six chiffres de l’application.</p>
+                </section>
               )}
               <label>
                 Code de double authentification
