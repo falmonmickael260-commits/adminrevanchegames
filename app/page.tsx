@@ -105,6 +105,9 @@ const labels: Record<string, string> = {
   context: "Contexte",
   pack_id: "Offre",
   coins: "Pièces",
+  limit: "Nombre total d’utilisations",
+  expires: "Date d’expiration",
+  delta: "Variation de pièces",
   amount: "Montant (centimes)",
   currency: "Devise",
   livemode: "Paiement réel",
@@ -490,6 +493,11 @@ function ActionDialog({
     if (form.action === "game")
       payload.maintenance = raw.maintenance === "true";
     if (form.action === "promo") {
+      payload.code = String(raw.code || "").trim().toUpperCase();
+      if (!/^[A-Z0-9_-]{3,60}$/.test(String(payload.code))) { setError("Code promo invalide : utilise de 3 à 60 lettres, chiffres, tirets ou underscores."); return; }
+      if (!Number.isInteger(Number(raw.coins)) || Number(raw.coins) < 1 || Number(raw.coins) > 1000000) { setError("Nombre de pièces invalide : saisis un entier de 1 à 1000000."); return; }
+      if (raw.limit && (!Number.isInteger(Number(raw.limit)) || Number(raw.limit) < 1 || Number(raw.limit) > 2147483647)) { setError("Limite d’utilisations invalide : saisis un entier positif ou laisse vide."); return; }
+      if (raw.expires && new Date(String(raw.expires)).getTime() <= Date.now() && raw.active === "true") { setError("Date d’expiration invalide : choisis une date future ou laisse vide."); return; }
       payload.active = raw.active === "true";
       payload.coins = Number(raw.coins);
       payload.limit = raw.limit ? Number(raw.limit) : null;
@@ -615,7 +623,7 @@ function ActionDialog({
             )}
             {["sanction", "announce", "promo"].includes(form.action) && (
               <label>
-                Expiration (obligatoire pour restriction ou suspension)
+                {form.action === "sanction" ? "Expiration (obligatoire pour restriction ou suspension)" : "Date d’expiration (facultative)"}
                 <input name="expires" type="datetime-local" />
               </label>
             )}
@@ -698,7 +706,8 @@ function ActionDialog({
               <>
                 <label>
                   Code
-                  <input name="code" required maxLength={60} />
+                  <input name="code" aria-label="Code promotionnel" required maxLength={60} autoCapitalize="characters" autoComplete="off" placeholder="EXEMPLE1500" />
+                  <small>3 à 60 lettres, chiffres, tirets ou underscores. Les minuscules et espaces autour du code sont corrigés automatiquement.</small>
                 </label>
                 <label>
                   Pièces
@@ -711,8 +720,9 @@ function ActionDialog({
                   />
                 </label>
                 <label>
-                  Nombre maximum d’utilisations
-                  <input name="limit" type="number" min={1} />
+                  Limite globale d’utilisations (facultatif)
+                  <input name="limit" type="number" min={1} max={2147483647} placeholder="Vide = illimité" />
+                  <small>Chaque compte peut utiliser le code une seule fois. Cette limite concerne le nombre total de comptes.</small>
                 </label>
                 <label>
                   Actif
@@ -868,6 +878,7 @@ export default function AdminPage() {
   const [section, setSection] = useState("dashboard");
   const [attention, setAttention] = useState<Data | null>(null);
   const [attentionError, setAttentionError] = useState("");
+  const [success, setSuccess] = useState("");
   const [target, setTarget] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
@@ -1043,6 +1054,7 @@ export default function AdminPage() {
         <section className="global-search">
           <PlayerPicker name="globalPlayer" label="Recherche globale — pseudo ou e-mail" optional onIdentity={person => navigate("player", person.id)} />
         </section>
+        {success && <p role="status" className="notice">{success}<button onClick={()=>setSuccess("")} aria-label="Fermer la confirmation"> ×</button></p>}
         {attentionError && <p role="status" className="notice">{attentionError}</p>}
         {section === "dashboard" && attention && <section className="panel">
           <h2>Alertes récentes · {attention.rows?.length || 0}</h2>
@@ -1445,7 +1457,11 @@ export default function AdminPage() {
           form={form}
           context={actionContext}
           onClose={() => setForm(null)}
-          onDone={(_result, id) => {
+          onDone={(result, id) => {
+            if (form.action === "promo") {
+              const promo = result as Row;
+              setSuccess(`Code ${String(promo.code)} enregistré : ${String(promo.reward_coins)} pièces par compte${promo.active ? "" : " (désactivé)"}.`);
+            }
             if (form.action === "spectate" && form.target)
               setObserver({ room: form.target, access: id });
             void load();

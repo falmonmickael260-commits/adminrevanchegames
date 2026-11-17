@@ -111,3 +111,9 @@ La disponibilité des jeux est un contrôle HTTP ; pour 10000, l’ouverture du 
 ### Plusieurs captures pour les signalements
 
 La plateforme peut joindre trois captures privées par signalement. La migration centrale `player_report_evidence` ajoute les métadonnées bornées et les politiques Storage nécessaires ; elle est déjà appliquée sur l’installation existante. Le dossier de signalement affiche un lien par capture. Le téléchargement utilise toujours la session du membre, son rôle de modération et la MFA, sans clé de service dans ce panneau. Les anciennes preuves restent accessibles via leur chemin historique.
+
+### Création fiable des codes promo
+
+Le panneau utilise `admin_save_promo`, une fonction limitée aux promotions, avec droits économie, MFA, motif, idempotence et audit. Le code est normalisé (espaces extérieurs retirés et majuscules), puis le montant entier, la limite facultative et l’expiration sont validés. La création ne crédite personne : le joueur reçoit les pièces sur son compte lorsqu’il saisit le code dans la boutique, via le mécanisme atomique existant `redeem_promo_code`, une fois par compte et dans la limite globale choisie.
+
+Pour une installation neuve, compléter les scripts précédents avec `setup/admin-report-evidence.sql` et `setup/admin-promo-codes.sql`. Ces migrations sont déjà appliquées à la plateforme existante. Les [avertissements attendus sur les fonctions SECURITY DEFINER](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) correspondent à des API explicitement contrôlées, sans accès anonyme.

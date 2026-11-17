@@ -25,11 +25,10 @@ export async function POST(request: Request) {
       Array.isArray(body.payload)
     )
       throw new AdminError("Action invalide.", 400);
-    const { data, error } = await db.rpc("admin_execute", {
-      p_id: body.id,
-      p_action: body.action,
-      p_payload: body.payload,
-    });
+    const { data, error } = body.action === "promo"
+      ? await db.rpc("admin_save_promo", { p_id: body.id, p_payload: body.payload })
+      : await db.rpc("admin_execute", { p_id: body.id, p_action: body.action, p_payload: body.payload });
+    if (error && body.action === "promo" && error.code === "22023" && /^(Code promo|Nombre de pièces|Limite d’utilisations|Date d’expiration)/.test(error.message)) throw new AdminError(error.message, 400);
     if (error)
       throw new AdminError(
         error.code === "42501"
